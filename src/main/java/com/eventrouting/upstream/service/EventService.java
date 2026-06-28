@@ -21,8 +21,10 @@ public class EventService {
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final EventProducer eventProducer;
+    private final EventIdGenerator eventIdGenerator;
 
     public void processEvent(EventRequest event) {
+        event.setEventId(eventIdGenerator.nextId());
         EventPublish eventPublish = convertToEventPublish(event);
         eventProducer.publish(eventPublish);
     }

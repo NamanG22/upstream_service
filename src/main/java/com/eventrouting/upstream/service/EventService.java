@@ -8,6 +8,7 @@ import java.util.Map;
 
 import org.springframework.stereotype.Service;
 
+import com.eventrouting.upstream.constants.ConfigConstants;
 import com.eventrouting.upstream.constants.EventConstants;
 import com.eventrouting.upstream.dto.EventPublish;
 import com.eventrouting.upstream.dto.EventRequest;
@@ -26,11 +27,18 @@ public class EventService {
     private final EventProducer eventProducer;
     private final EventIdGenerator eventIdGenerator;
     private final AmountGenerator amountGenerator;
+    private final ParticipantIdGenerator participantIdGenerator;
 
     public void processEvent(EventRequest event) {
         event.setEventId(eventIdGenerator.nextId());
         if (event.getAmount() == null || event.getAmount().isBlank()) {
             event.setAmount(amountGenerator.nextAmount());
+        }
+        if (event.getMerchantId() == null || event.getMerchantId().isBlank()) {
+            event.setMerchantId(participantIdGenerator.randomMerchantId());
+        }
+        if (event.getCustomerId() == null || event.getCustomerId().isBlank()) {
+            event.setCustomerId(participantIdGenerator.randomCustomerId());
         }
         enrichMetadata(event);
         EventPublish eventPublish = convertToEventPublish(event);
@@ -43,7 +51,7 @@ public class EventService {
             metadata = new HashMap<>(1);
             event.setMetadata(metadata);
         }
-        metadata.put(EventConstants.METADATA_TEMPLATE_ID_KEY, EventConstants.TEMPLATE_ID);
+        metadata.put(EventConstants.METADATA_TEMPLATE_ID_KEY, ConfigConstants.TEMPLATE_ID);
     }
 
     private EventPublish convertToEventPublish(EventRequest event) {

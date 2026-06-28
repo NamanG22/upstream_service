@@ -3,9 +3,12 @@ package com.eventrouting.upstream.service;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.springframework.stereotype.Service;
 
+import com.eventrouting.upstream.constants.EventConstants;
 import com.eventrouting.upstream.dto.EventPublish;
 import com.eventrouting.upstream.dto.EventRequest;
 import com.eventrouting.upstream.kafka.EventProducer;
@@ -29,8 +32,18 @@ public class EventService {
         if (event.getAmount() == null || event.getAmount().isBlank()) {
             event.setAmount(amountGenerator.nextAmount());
         }
+        enrichMetadata(event);
         EventPublish eventPublish = convertToEventPublish(event);
         eventProducer.publish(eventPublish);
+    }
+
+    private void enrichMetadata(EventRequest event) {
+        Map<String, String> metadata = event.getMetadata();
+        if (metadata == null) {
+            metadata = new HashMap<>(1);
+            event.setMetadata(metadata);
+        }
+        metadata.put(EventConstants.METADATA_TEMPLATE_ID_KEY, EventConstants.TEMPLATE_ID);
     }
 
     private EventPublish convertToEventPublish(EventRequest event) {

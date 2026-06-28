@@ -22,9 +22,13 @@ public class EventService {
 
     private final EventProducer eventProducer;
     private final EventIdGenerator eventIdGenerator;
+    private final AmountGenerator amountGenerator;
 
     public void processEvent(EventRequest event) {
         event.setEventId(eventIdGenerator.nextId());
+        if (event.getAmount() == null || event.getAmount().isBlank()) {
+            event.setAmount(amountGenerator.nextAmount());
+        }
         EventPublish eventPublish = convertToEventPublish(event);
         eventProducer.publish(eventPublish);
     }

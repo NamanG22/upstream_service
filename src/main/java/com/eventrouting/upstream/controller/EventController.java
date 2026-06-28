@@ -6,20 +6,19 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.eventrouting.upstream.dto.EventRequest;
-import com.eventrouting.upstream.kafka.EventProducer;
+import com.eventrouting.upstream.service.EventService;
+
+import lombok.RequiredArgsConstructor;
 
 @RestController
+@RequiredArgsConstructor
 public class EventController {
 
-	private final EventProducer eventProducer;
-
-	public EventController(EventProducer eventProducer) {
-		this.eventProducer = eventProducer;
-	}
+	private final EventService eventService;
 
 	@PostMapping("/events")
 	public ResponseEntity<Void> processEvent(@RequestBody EventRequest event) {
-		eventProducer.publish(event);
+		eventService.processEvent(event);
 		return ResponseEntity.accepted().build();
 	}
 

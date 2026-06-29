@@ -43,7 +43,9 @@ class ParticipantIdGeneratorTest {
 
 		long merchantId = Long.parseLong(generator.randomMerchantId());
 
-		assertThat(merchantId).isBetween(ConfigConstants.MIN_PARTICIPANT_ID, 1007L);
+		assertThat(merchantId).isBetween(
+				ConfigConstants.MIN_PARTICIPANT_ID,
+				ConfigConstants.DEFAULT_MAX_PARTICIPANT_ID + 1);
 	}
 
 	@Test

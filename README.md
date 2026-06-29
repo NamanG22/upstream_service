@@ -2,6 +2,11 @@
 
 HTTP ingress service for the Event Routing Engine. Accepts payment-related events via REST, enriches them with server-generated values, and publishes them to a Kafka topic for downstream processing.
 
+Two APIs are available:
+
+- **`POST /events`** — publish a single event immediately (client supplies payment status and optional transaction details).
+- **`POST /transactions`** — start a simulated payment transaction: publishes a `PENDING` event immediately, then a `SUCCESS` or `FAILED` event after a configurable random delay.
+
 ## Prerequisites
 
 - Java 17+
@@ -17,8 +22,13 @@ Settings are in `src/main/resources/application.properties`:
 | `spring.kafka.bootstrap-servers` | `localhost:9092` | Kafka broker |
 | `app.kafka.events-topic` | `events` | Topic for published events |
 | `app.event-id.counter-file` | `./data/event-id.counter` | File-backed sequential event ID counter |
+| `app.transaction-id.counter-file` | `./data/transaction-id.counter` | File-backed sequential transaction ID counter |
 | `app.merchant-id.counter-file` | `./data/merchant-id.counter` | File storing max merchant ID for random selection |
 | `app.customer-id.counter-file` | `./data/customer-id.counter` | File storing max customer ID for random selection |
+| `app.transaction.delay.upi-qr.min-ms` | `2000` | Minimum completion delay for `UPI_QR` transactions (ms) |
+| `app.transaction.delay.upi-qr.max-ms` | `120000` | Maximum completion delay for `UPI_QR` transactions (ms) |
+| `app.transaction.delay.online-checkout.min-ms` | `10000` | Minimum completion delay for `ONLINE_CHECKOUT` transactions (ms) |
+| `app.transaction.delay.online-checkout.max-ms` | `300000` | Maximum completion delay for `ONLINE_CHECKOUT` transactions (ms) |
 
 Override locally with environment variables or an `application-local.properties` file (gitignored).
 
@@ -28,7 +38,8 @@ On startup the service creates a `data/` directory (gitignored) and loads counte
 
 | File | Purpose |
 | --- | --- |
-| `data/event-id.counter` | Last assigned event ID; next request gets `last + 1` |
+| `data/event-id.counter` | Last assigned event ID; next event gets `last + 1` |
+| `data/transaction-id.counter` | Last assigned transaction ID; next transaction gets `last + 1` |
 | `data/merchant-id.counter` | Max merchant ID used when picking a random merchant |
 | `data/customer-id.counter` | Max customer ID used when picking a random customer |
 
@@ -46,7 +57,9 @@ The service starts on `http://localhost:9090`.
 
 ## API
 
-### Publish event
+### Publish event (`POST /events`)
+
+Publishes a single event to Kafka immediately.
 
 ```http
 POST /events
@@ -72,7 +85,7 @@ Only the fields below are required. Other fields are optional and will be genera
 
 **Response:** `202 Accepted` (empty body)
 
-### Server-side enrichment
+#### Server-side enrichment (`/events`)
 
 Before publishing to Kafka, the service fills in or overrides the following:
 
@@ -106,6 +119,108 @@ Before publishing to Kafka, the service fills in or overrides the following:
 }
 ```
 
+### Initiate transaction (`POST /transactions`)
+
+Simulates a full payment lifecycle by publishing two Kafka events for the same transaction:
+
+1. **Immediately** — a `PENDING` event.
+2. **After a random delay** — a `SUCCESS` or `FAILED` event (chosen at random).
+
+All fields except `eventId`, `paymentStatus`, `timestamp`, and terminal-event metadata are identical across both events in a transaction.
+
+```http
+POST /transactions
+Content-Type: application/json
+```
+
+**Request body**
+
+Only client-provided fields are accepted. Server-generated fields (`eventId`, `transactionId`, `merchantId`, `customerId`, `amount`, `paymentStatus`) must not be sent.
+
+```json
+{
+  "eventType": "PAYMENT_STATUS_UPDATED",
+  "paymentMode": "UPI_QR",
+  "currency": "INR",
+  "metadata": {
+    "source": "mobile-app"
+  }
+}
+```
+
+**Response:** `202 Accepted` (empty body)
+
+#### Transaction flow
+
+| Step | When | `paymentStatus` | Notes |
+| --- | --- | --- | --- |
+| 1 | On API call | `PENDING` | Transaction and participant details are generated once and frozen for the lifecycle. |
+| 2 | After random delay | `SUCCESS` or `FAILED` | Delay is chosen per `paymentMode` (see configuration table above). |
+
+**Completion delay by payment mode**
+
+| `paymentMode` | Random delay range (default) |
+| --- | --- |
+| `UPI_QR` | 2 s – 120 s |
+| `ONLINE_CHECKOUT` | 10 s – 300 s |
+
+#### Server-side generation (`/transactions`)
+
+| Field | Behavior |
+| --- | --- |
+| `transactionId` | Always assigned by the server (sequential, file-backed counter). |
+| `eventId` | New sequential ID for each event (pending and terminal). |
+| `amount` | Random value between `0.01` and `10000.00`. |
+| `merchantId` | Random ID from `1001` to `max + 1`. |
+| `customerId` | Random ID from `1001` to `max + 1`. |
+| `paymentStatus` | `PENDING` on first event; `SUCCESS` or `FAILED` on second. |
+| `metadata.templateId` | Always set on both events. |
+| `metadata.completionDelayMs` | Set on the terminal event only — the chosen delay in milliseconds. |
+| `timestamp` | Set independently on each published event (IST, `yyyy-MM-dd HH:mm:ss`). |
+
+**Example: pending event (published immediately)**
+
+```json
+{
+  "eventId": "1011",
+  "eventType": "PAYMENT_STATUS_UPDATED",
+  "paymentMode": "UPI_QR",
+  "paymentStatus": "PENDING",
+  "merchantId": "1004",
+  "customerId": "1007",
+  "transactionId": "1001",
+  "amount": "1523.45",
+  "currency": "INR",
+  "metadata": {
+    "source": "mobile-app",
+    "templateId": "1001"
+  },
+  "timestamp": "2026-06-29 10:00:00"
+}
+```
+
+**Example: terminal event (published after delay)**
+
+```json
+{
+  "eventId": "1012",
+  "eventType": "PAYMENT_STATUS_UPDATED",
+  "paymentMode": "UPI_QR",
+  "paymentStatus": "SUCCESS",
+  "merchantId": "1004",
+  "customerId": "1007",
+  "transactionId": "1001",
+  "amount": "1523.45",
+  "currency": "INR",
+  "metadata": {
+    "source": "mobile-app",
+    "templateId": "1001",
+    "completionDelayMs": "45000"
+  },
+  "timestamp": "2026-06-29 10:00:45"
+}
+```
+
 ### Supported enum values
 
 | Field | Values |
@@ -127,12 +242,13 @@ Tests use Spring's embedded Kafka broker; no external Kafka instance is required
 
 ```
 src/main/java/com/eventrouting/upstream/
+├── config/       # Scheduling and transaction delay configuration
 ├── constants/    # Template ID and participant ID range constants
-├── controller/   # REST endpoints
+├── controller/   # REST endpoints (/events, /transactions)
 ├── dto/          # Request and publish payloads
 ├── enums/        # Event, payment, and currency types
 ├── kafka/        # Kafka producer
-└── service/      # Event processing, ID/amount generators, file-backed counters
+└── service/      # Event/transaction processing, ID/amount generators, file-backed counters
 ```
 
 ## Build

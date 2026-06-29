@@ -16,6 +16,7 @@ class UpstreamServiceApplicationTests {
 	static void overrideProperties(DynamicPropertyRegistry registry) {
 		Path testDir = Path.of(System.getProperty("java.io.tmpdir"), "upstream-service-test");
 		registry.add("app.event-id.counter-file", () -> testDir.resolve("event-id.counter").toString());
+		registry.add("app.transaction-id.counter-file", () -> testDir.resolve("transaction-id.counter").toString());
 		registry.add("app.merchant-id.counter-file", () -> testDir.resolve("merchant-id.counter").toString());
 		registry.add("app.customer-id.counter-file", () -> testDir.resolve("customer-id.counter").toString());
 	}

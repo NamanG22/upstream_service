@@ -82,6 +82,7 @@ public class TransactionService {
 		}
 
 		EventPublish eventPublish = new EventPublish();
+		eventPublish.setUpstreamId(ConfigConstants.UPSTREAM_ID);
 		eventPublish.setEventId(eventIdGenerator.nextId());
 		eventPublish.setEventType(snapshot.eventType());
 		eventPublish.setPaymentMode(snapshot.paymentMode());

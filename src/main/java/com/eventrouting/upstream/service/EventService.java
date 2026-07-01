@@ -56,6 +56,7 @@ public class EventService {
 
     private EventPublish convertToEventPublish(EventRequest event) {
 		EventPublish eventPublish = new EventPublish();
+		eventPublish.setUpstreamId(ConfigConstants.UPSTREAM_ID);
 		eventPublish.setEventId(event.getEventId());
 		eventPublish.setPaymentMode(event.getPaymentMode());
 		eventPublish.setPaymentStatus(event.getPaymentStatus());

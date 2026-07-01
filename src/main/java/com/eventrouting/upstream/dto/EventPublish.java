@@ -11,6 +11,7 @@ import lombok.Data;
 
 @Data
 public class EventPublish {
+    private String upstreamId;
     private String eventId;
     private EventType eventType;
     private PaymentMode paymentMode;
